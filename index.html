@@ -1,0 +1,519 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>Credit Risk Model for an Anonymous Company by shinezhou9</title>
+    <link rel="stylesheet" href="stylesheets/styles.css">
+    <link rel="stylesheet" href="stylesheets/pygment_trac.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+    <script src="javascripts/main.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+
+  </head>
+  <body>
+
+      <header>
+        <h1>Credit Risk Model for an Anonymous Company</h1>
+        <p>build predictive models to calculate the probability of the credit risk and choose cut-off rate for default risk to provide decision support on profit-risk control</p>
+      </header>
+
+      <div id="banner">
+        <span id="logo"></span>
+
+        <a href="https://github.com/shinezhou9/CreditRiskModel" class="button fork"><strong>View On GitHub</strong></a>
+        <div class="downloads">
+          <span>Downloads:</span>
+          <ul>
+            <li><a href="https://github.com/shinezhou9/CreditRiskModel/zipball/master" class="button">ZIP</a></li>
+            <li><a href="https://github.com/shinezhou9/CreditRiskModel/tarball/master" class="button">TAR</a></li>
+          </ul>
+        </div>
+      </div><!-- end banner -->
+
+    <div class="wrapper">
+      <nav>
+        <ul></ul>
+      </nav>
+      <section>
+        <h1>
+<a id="credit-risk-model-for-an-anonymous-company" class="anchor" href="#credit-risk-model-for-an-anonymous-company" aria-hidden="true"><span class="octicon octicon-link"></span></a>Credit Risk Model for an Anonymous Company</h1>
+
+<p>Shiming Zhou<br>
+November 29, 2014  </p>
+
+<h2>
+<a id="executive-summary" class="anchor" href="#executive-summary" aria-hidden="true"><span class="octicon octicon-link"></span></a>Executive Summary</h2>
+
+<ol>
+<li>
+<strong>Purpose</strong>: Use dataset(including 7 predictors) as the input variables. Built the predictive model give the probability of the default risk.</li>
+<li>
+<strong>Preprocessing step</strong>: Explored the missing values; Center-scale, and boxcox the skewed numeric predictors; Created dummy variables for factor predictors; Remove redundant highly correlated variables; Remove near-zero predictors to form reducedset, but also keep the near-zero as well as the full set (can be used for differen models).</li>
+<li>
+<strong>Measure the performance</strong>: Build the predictive models using all the records in the table because of the highly unbalanced default output(risk vs nonrisk), measure the performance thought the 10-fold cross validation method.</li>
+<li>
+<strong>Build the models</strong>: Start building the models with Boosted tree model (least interpreta, but tend to produce most accurate results); Then apply Logistic regression, more simplistic and easy to implement (build two with fullset and reducedset).</li>
+<li>
+<strong>Select the model</strong>: Compare the models performance by AUC (area under ROC curve), procesing time and interpretability, choose Logistic Regression Model(with reducedset) as the final model, and we can get the variable importance easily from the coefficients.</li>
+<li>
+<strong>Calculate the cut-off rate</strong> (for default risk): by using the ROC weighted "closest.topleft" best thresholds choosing strategy. Get weight by calculating Probability Cost Function.</li>
+<li>other thoughts: in the model building steps, I tried randomforest and neural network as well, however, my computer cannot handel with these two complex models. Therefore, there might other complex models can provide better AUC, but the Logistic Regression already get the similar AUC compared with boosted trees. which indicates the current model reasonably approximates the performance of the more complex methods.</li>
+</ol>
+
+<h2>
+<a id="dataset" class="anchor" href="#dataset" aria-hidden="true"><span class="octicon octicon-link"></span></a>Dataset</h2>
+
+<p>45211 observations with 8 variables</p>
+
+<ol>
+<li>age (numeric)</li>
+<li>job : type of job (categorical: "admin.","unknown","unemployed","management","housemaid","entrepreneur","student","blue-collar","self-employed","retired","technician","services") </li>
+<li>marital : marital status (categorical: "married","divorced","single"; note: "divorced" means divorced or widowed)</li>
+<li>education (categorical: "unknown","secondary","primary","tertiary")</li>
+<li>default: has credit in default? (binary: "yes","no")</li>
+<li>balance: average yearly balance, in euros (numeric) </li>
+<li>housing: has housing loan? (binary: "yes","no")</li>
+<li>loan: has personal loan? (binary: "yes","no")</li>
+</ol>
+
+<h2>
+<a id="preprocess-the-data" class="anchor" href="#preprocess-the-data" aria-hidden="true"><span class="octicon octicon-link"></span></a>Preprocess the Data</h2>
+
+<p>change the xlsx file to csv file to make the reading process much faster</p>
+
+<div class="highlight highlight-r"><pre><span class="pl-vo">mydata</span> <span class="pl-k">&lt;-</span> read.csv(<span class="pl-s1"><span class="pl-pds">"</span>Jenn's test.csv<span class="pl-pds">"</span></span>, <span class="pl-v">header</span> <span class="pl-k">=</span> <span class="pl-c1">TRUE</span>)</pre></div>
+
+<h3>
+<a id="dealing-with-na-values" class="anchor" href="#dealing-with-na-values" aria-hidden="true"><span class="octicon octicon-link"></span></a>Dealing with NA values</h3>
+
+<div class="highlight highlight-r"><pre>library(<span class="pl-vo">caret</span>)</pre></div>
+
+<pre><code>## Loading required package: lattice
+## Loading required package: ggplot2
+</code></pre>
+
+<div class="highlight highlight-r"><pre><span class="pl-vo">naTest</span> <span class="pl-k">&lt;-</span> apply(<span class="pl-vo">mydata</span>, <span class="pl-c1">2</span>, <span class="pl-k">function</span>(<span class="pl-vo">x</span>) sum(is.na(<span class="pl-vo">x</span>)<span class="pl-k">==</span><span class="pl-c1">TRUE</span>))
+<span class="pl-vo">naTest</span></pre></div>
+
+<pre><code>##       age       job   marital education   default   balance   housing 
+##         0         0         0         0         0         0         0 
+##      loan 
+##         0
+</code></pre>
+
+<p><em>No missing values, cheers!</em></p>
+
+<h3>
+<a id="plotting-numeric-predictors-density" class="anchor" href="#plotting-numeric-predictors-density" aria-hidden="true"><span class="octicon octicon-link"></span></a>Plotting Numeric Predictors Density</h3>
+
+<p><img src="./CreditRiskModel_files/figure-html/unnamed-chunk-31.png" alt="plot of chunk unnamed-chunk-3"> <img src="./CreditRiskModel_files/figure-html/unnamed-chunk-32.png" alt="plot of chunk unnamed-chunk-3"> </p>
+
+<p><em>Right skewness distribution.</em></p>
+
+<h3>
+<a id="transforming-skewed-predictors" class="anchor" href="#transforming-skewed-predictors" aria-hidden="true"><span class="octicon octicon-link"></span></a>Transforming Skewed Predictors.</h3>
+
+<p>"BoxCox" and Standardizing to make numeric variables more normalized distribution like, "Centering" and "Scaling" to improve the numerical stability of the calculations.</p>
+
+<div class="highlight highlight-r"><pre><span class="pl-vo">preObj</span> <span class="pl-k">&lt;-</span> preProcess(<span class="pl-vo">mydata1</span>[,<span class="pl-k">-</span><span class="pl-c1">3</span>], <span class="pl-v">method</span> <span class="pl-k">=</span> c(<span class="pl-s1"><span class="pl-pds">"</span>BoxCox<span class="pl-pds">"</span></span>,<span class="pl-s1"><span class="pl-pds">"</span>center<span class="pl-pds">"</span></span>, <span class="pl-s1"><span class="pl-pds">"</span>scale<span class="pl-pds">"</span></span>))
+<span class="pl-vo">trainmydata</span> <span class="pl-k">&lt;-</span> predict(<span class="pl-vo">preObj</span>, <span class="pl-vo">mydata1</span>[,<span class="pl-k">-</span><span class="pl-c1">3</span>])
+<span class="pl-vo">mydata2</span> <span class="pl-k">&lt;-</span> <span class="pl-vo">mydata</span>
+<span class="pl-vo">mydata2</span><span class="pl-k">$</span><span class="pl-vo">age</span> <span class="pl-k">&lt;-</span> <span class="pl-vo">trainmydata</span><span class="pl-k">$</span><span class="pl-vo">age</span>
+<span class="pl-vo">mydata2</span><span class="pl-k">$</span><span class="pl-vo">balance</span> <span class="pl-k">&lt;-</span> <span class="pl-vo">trainmydata</span><span class="pl-k">$</span><span class="pl-vo">balance</span></pre></div>
+
+<h3>
+<a id="creating-dummy-variables" class="anchor" href="#creating-dummy-variables" aria-hidden="true"><span class="octicon octicon-link"></span></a>Creating Dummy Variables</h3>
+
+<div class="highlight highlight-r"><pre><span class="pl-vo">dummies</span> <span class="pl-k">&lt;-</span> dummyVars(<span class="pl-vo">default</span><span class="pl-k">~</span>., <span class="pl-v">data</span> <span class="pl-k">=</span> <span class="pl-vo">mydata2</span>)
+<span class="pl-vo">mydata3</span> <span class="pl-k">&lt;-</span> predict(<span class="pl-vo">dummies</span>, <span class="pl-v">newdata</span> <span class="pl-k">=</span> <span class="pl-vo">mydata2</span>)
+<span class="pl-vo">mydata3</span> <span class="pl-k">&lt;-</span> <span class="pl-st">data.frame</span>(<span class="pl-vo">mydata3</span>)
+<span class="pl-vo">mydata3</span><span class="pl-k">$</span><span class="pl-vo">default</span> <span class="pl-k">&lt;-</span> <span class="pl-vo">mydata2</span><span class="pl-k">$</span><span class="pl-vo">default</span></pre></div>
+
+<h3>
+<a id="remove-near-zero-variables" class="anchor" href="#remove-near-zero-variables" aria-hidden="true"><span class="octicon octicon-link"></span></a>remove near-zero variables</h3>
+
+<p>the binary nature of many predictors resulted in many cases where the data are very sparse and unbalanced.These high degree of class imbalance indicates that many of the predictors could be classified as near-zero variance predictors, which can lead to computational issues in many of the models.</p>
+
+<div class="highlight highlight-r"><pre><span class="pl-vo">nzv</span> <span class="pl-k">&lt;-</span> nearZeroVar(<span class="pl-vo">mydata3</span>, <span class="pl-v">saveMetrics</span><span class="pl-k">=</span><span class="pl-c1">TRUE</span>)
+<span class="pl-vo">nzv1</span> <span class="pl-k">&lt;-</span> which(<span class="pl-vo">nzv</span><span class="pl-k">$</span><span class="pl-vo">nzv</span><span class="pl-k">==</span><span class="pl-c1">TRUE</span>)
+<span class="pl-vo">mydata4</span> <span class="pl-k">&lt;-</span> <span class="pl-vo">mydata3</span>[,<span class="pl-k">-</span>(<span class="pl-vo">nzv1</span>)]
+<span class="pl-vo">mydata4</span><span class="pl-k">$</span><span class="pl-vo">default</span> <span class="pl-k">&lt;-</span> <span class="pl-vo">mydata3</span><span class="pl-k">$</span><span class="pl-vo">default</span></pre></div>
+
+<ul>
+<li>"full set" of predictors <code>mydata3</code> included all the variables regardless of their distribution. </li>
+<li>"reduced set" <code>mydata4</code> was developed for models that are sensitive to sparse and unbalanced predictors</li>
+</ul>
+
+<h3>
+<a id="dealing-with-collinearity-problem" class="anchor" href="#dealing-with-collinearity-problem" aria-hidden="true"><span class="octicon octicon-link"></span></a>Dealing with collinearity problem</h3>
+
+<p>Visualize the correlation plots</p>
+
+<p><img src="./CreditRiskModel_files/figure-html/unnamed-chunk-71.png" alt="plot of chunk unnamed-chunk-7"> <img src="./CreditRiskModel_files/figure-html/unnamed-chunk-72.png" alt="plot of chunk unnamed-chunk-7"> </p>
+
+<p>a high-correlations filter was used on the predictors set to remove these highly redundant predictors from both datasets</p>
+
+<div class="highlight highlight-r"><pre><span class="pl-vo">fullCovMat</span> <span class="pl-k">&lt;-</span> cov(<span class="pl-vo">mydata3</span>[,<span class="pl-k">-</span><span class="pl-c1">26</span>])
+library(<span class="pl-vo">subselect</span>)
+<span class="pl-vo">fullResults</span> <span class="pl-k">&lt;-</span> trim.matrix(<span class="pl-vo">fullCovMat</span>)
+<span class="pl-vo">discardName1</span> <span class="pl-k">&lt;-</span> <span class="pl-vo">fullResults</span><span class="pl-k">$</span><span class="pl-vo">names.discarded</span>
+<span class="pl-vo">discardName1</span></pre></div>
+
+<pre><code>## [1] "job.unknown"       "marital.divorced"  "education.unknown"
+## [4] "housing.yes"       "loan.yes"
+</code></pre>
+
+<div class="highlight highlight-r"><pre><span class="pl-vo">reducedCovMat</span> <span class="pl-k">&lt;-</span> cov(<span class="pl-vo">mydata4</span>[,<span class="pl-k">-</span><span class="pl-c1">19</span>])
+<span class="pl-vo">reducedResults</span> <span class="pl-k">&lt;-</span> trim.matrix(<span class="pl-vo">reducedCovMat</span>)
+<span class="pl-vo">discardName2</span> <span class="pl-k">&lt;-</span> <span class="pl-vo">reducedResults</span><span class="pl-k">$</span><span class="pl-vo">names.discarded</span>
+<span class="pl-vo">discardName2</span></pre></div>
+
+<pre><code>## [1] "marital.divorced" "housing.yes"      "loan.no"
+</code></pre>
+
+<div class="highlight highlight-r"><pre><span class="pl-vo">mydata3</span> <span class="pl-k">&lt;-</span> <span class="pl-vo">mydata3</span>[,<span class="pl-k">-</span>(<span class="pl-vo">fullResults</span><span class="pl-k">$</span><span class="pl-vo">numbers.discarded</span>)]
+<span class="pl-vo">mydata4</span> <span class="pl-k">&lt;-</span> <span class="pl-vo">mydata4</span>[,<span class="pl-k">-</span>(<span class="pl-vo">reducedResults</span><span class="pl-k">$</span><span class="pl-vo">numbers.discarded</span>)]</pre></div>
+
+<h2>
+<a id="build-predictive-models" class="anchor" href="#build-predictive-models" aria-hidden="true"><span class="octicon octicon-link"></span></a>Build Predictive Models</h2>
+
+<ul>
+<li>Start building the models that are the least interpretable and most flexible, they tend to have a high likelihood of producing the empirically optimum results. Here I choose to start with Boosted tree model.</li>
+<li>Then I choose Logistic regression, which is a more simplistic technique for estimating a classification boundary. It has no tuning parameters and its prediction equation is simple and easy to implement using most software (build two with fullset and reducedset)</li>
+<li>Then compare the models performance though AUC (area under ROC curve) and the procesing time to choose the final model</li>
+</ul>
+
+<p><img src="./CreditRiskModel_files/figure-html/unnamed-chunk-9.png" alt="plot of chunk unnamed-chunk-9"> </p>
+
+<p>the barplot shows the unbalanced number of observations in credit risk vs non-credit risk people. Therefore, We will use all the observations to create our predictive model and measure the performance using cross validation resampling strategies. </p>
+
+<p>the frequency of "no" is 0.982</p>
+
+<h3>
+<a id="parallel-processing" class="anchor" href="#parallel-processing" aria-hidden="true"><span class="octicon octicon-link"></span></a>Parallel processing</h3>
+
+<p>Use doSNOW for doing parallel processing</p>
+
+<div class="highlight highlight-r"><pre>library(<span class="pl-vo">doSNOW</span>)</pre></div>
+
+<pre><code>## Loading required package: foreach
+## Loading required package: iterators
+## Loading required package: snow
+</code></pre>
+
+<div class="highlight highlight-r"><pre>registerDoSNOW(makeCluster(<span class="pl-c1">2</span>, <span class="pl-v">type</span> <span class="pl-k">=</span> <span class="pl-s1"><span class="pl-pds">"</span>SOCK<span class="pl-pds">"</span></span>))</pre></div>
+
+<h3>
+<a id="set-traincontrol-parameters" class="anchor" href="#set-traincontrol-parameters" aria-hidden="true"><span class="octicon octicon-link"></span></a>Set trainControl parameters</h3>
+
+<p>We will use 10-fold cross validation to evaluate the models and select to parameters(for some models)</p>
+
+<div class="highlight highlight-r"><pre><span class="pl-vo">ctrl</span> <span class="pl-k">&lt;-</span> trainControl(<span class="pl-v">method</span><span class="pl-k">=</span><span class="pl-s1"><span class="pl-pds">"</span>cv<span class="pl-pds">"</span></span>, <span class="pl-v">summaryFunction</span> <span class="pl-k">=</span> <span class="pl-vo">twoClassSummary</span>,<span class="pl-v">classProbs</span><span class="pl-k">=</span><span class="pl-c1">TRUE</span>, <span class="pl-v">savePredictions</span> <span class="pl-k">=</span><span class="pl-c1">TRUE</span>)</pre></div>
+
+<h3>
+<a id="model1boosted-tree-model" class="anchor" href="#model1boosted-tree-model" aria-hidden="true"><span class="octicon octicon-link"></span></a>Model1:Boosted Tree Model</h3>
+
+<div class="highlight highlight-r"><pre>library(<span class="pl-vo">pROC</span>)</pre></div>
+
+<pre><code>## Type 'citation("pROC")' for a citation.
+## 
+## Attaching package: 'pROC'
+## 
+## The following objects are masked from 'package:stats':
+## 
+##     cov, smooth, var
+</code></pre>
+
+<div class="highlight highlight-r"><pre>library(<span class="pl-vo">gbm</span>)</pre></div>
+
+<pre><code>## Loading required package: survival
+## Loading required package: splines
+## 
+## Attaching package: 'survival'
+## 
+## The following object is masked from 'package:caret':
+## 
+##     cluster
+## 
+## Loading required package: parallel
+## 
+## Attaching package: 'parallel'
+## 
+## The following objects are masked from 'package:snow':
+## 
+##     clusterApply, clusterApplyLB, clusterCall, clusterEvalQ,
+##     clusterExport, clusterMap, clusterSplit, makeCluster,
+##     parApply, parCapply, parLapply, parRapply, parSapply,
+##     splitIndices, stopCluster
+## 
+## Loaded gbm 2.1
+</code></pre>
+
+<div class="highlight highlight-r"><pre>library(<span class="pl-vo">plyr</span>)
+set.seed(<span class="pl-c1">4321</span>)
+<span class="pl-vo">t1</span> <span class="pl-k">&lt;-</span> Sys.time()
+<span class="pl-vo">mod1</span> <span class="pl-k">&lt;-</span> train(<span class="pl-vo">default</span><span class="pl-k">~</span>., <span class="pl-v">data</span> <span class="pl-k">=</span> <span class="pl-vo">mydata</span>, <span class="pl-v">method</span> <span class="pl-k">=</span> <span class="pl-s1"><span class="pl-pds">"</span>gbm<span class="pl-pds">"</span></span>,<span class="pl-v">metric</span> <span class="pl-k">=</span> <span class="pl-s1"><span class="pl-pds">"</span>ROC<span class="pl-pds">"</span></span>,<span class="pl-v">trControl</span> <span class="pl-k">=</span> <span class="pl-vo">ctrl</span>, <span class="pl-v">verbose</span><span class="pl-k">=</span><span class="pl-c1">FALSE</span>)
+<span class="pl-vo">t2</span> <span class="pl-k">&lt;-</span> Sys.time()
+<span class="pl-vo">tmod1</span> <span class="pl-k">&lt;-</span> difftime(<span class="pl-vo">t2</span>,<span class="pl-vo">t1</span>)
+<span class="pl-vo">mod1</span></pre></div>
+
+<pre><code>## Stochastic Gradient Boosting 
+## 
+## 45211 samples
+##     7 predictor
+##     2 classes: 'no', 'yes' 
+## 
+## No pre-processing
+## Resampling: Cross-Validated (10 fold) 
+## 
+## Summary of sample sizes: 40689, 40690, 40691, 40690, 40690, 40691, ... 
+## 
+## Resampling results across tuning parameters:
+## 
+##   interaction.depth  n.trees  ROC  Sens  Spec   ROC SD  Sens SD  Spec SD
+##   1                   50      0.9  1     0.000  0.02    1e-04    0.000  
+##   1                  100      0.9  1     0.001  0.02    2e-04    0.004  
+##   1                  150      0.9  1     0.002  0.02    2e-04    0.005  
+##   2                   50      0.9  1     0.002  0.02    2e-04    0.005  
+##   2                  100      0.9  1     0.010  0.02    2e-04    0.010  
+##   2                  150      0.9  1     0.012  0.02    2e-04    0.008  
+##   3                   50      0.9  1     0.006  0.02    2e-04    0.009  
+##   3                  100      0.9  1     0.012  0.02    2e-04    0.013  
+##   3                  150      0.9  1     0.016  0.02    3e-04    0.019  
+## 
+## Tuning parameter 'shrinkage' was held constant at a value of 0.1
+## ROC was used to select the optimal model using  the largest value.
+## The final values used for the model were n.trees = 150,
+##  interaction.depth = 3 and shrinkage = 0.1.
+</code></pre>
+
+<div class="highlight highlight-r"><pre><span class="pl-vo">tmod1</span></pre></div>
+
+<pre><code>## Time difference of 1.835 mins
+</code></pre>
+
+<h3>
+<a id="model2-logistic-regression-with-fullset" class="anchor" href="#model2-logistic-regression-with-fullset" aria-hidden="true"><span class="octicon octicon-link"></span></a>Model2: Logistic Regression with fullset</h3>
+
+<div class="highlight highlight-r"><pre>set.seed(<span class="pl-c1">4321</span>)
+<span class="pl-vo">t3</span> <span class="pl-k">&lt;-</span> Sys.time()
+<span class="pl-vo">mod2</span> <span class="pl-k">&lt;-</span> train(<span class="pl-vo">default</span><span class="pl-k">~</span>., <span class="pl-v">data</span> <span class="pl-k">=</span> <span class="pl-vo">mydata3</span>, <span class="pl-v">method</span> <span class="pl-k">=</span> <span class="pl-s1"><span class="pl-pds">"</span>glm<span class="pl-pds">"</span></span>, <span class="pl-v">metric</span><span class="pl-k">=</span><span class="pl-s1"><span class="pl-pds">"</span>ROC<span class="pl-pds">"</span></span>,<span class="pl-v">trControl</span> <span class="pl-k">=</span> <span class="pl-vo">ctrl</span>)</pre></div>
+
+<pre><code>## Warning: glm.fit: fitted probabilities numerically 0 or 1 occurred
+</code></pre>
+
+<div class="highlight highlight-r"><pre><span class="pl-vo">t4</span> <span class="pl-k">&lt;-</span> Sys.time()
+<span class="pl-vo">tmod2</span> <span class="pl-k">&lt;-</span> difftime(<span class="pl-vo">t4</span>,<span class="pl-vo">t3</span>)
+<span class="pl-vo">mod2</span></pre></div>
+
+<pre><code>## Generalized Linear Model 
+## 
+## 45211 samples
+##    20 predictor
+##     2 classes: 'no', 'yes' 
+## 
+## No pre-processing
+## Resampling: Cross-Validated (10 fold) 
+## 
+## Summary of sample sizes: 40689, 40690, 40691, 40690, 40690, 40691, ... 
+## 
+## Resampling results
+## 
+##   ROC  Sens  Spec  ROC SD  Sens SD  Spec SD
+##   0.9  1     0.02  0.02    4e-04    0.02   
+## 
+## 
+</code></pre>
+
+<div class="highlight highlight-r"><pre><span class="pl-vo">tmod2</span></pre></div>
+
+<pre><code>## Time difference of 24.63 secs
+</code></pre>
+
+<h3>
+<a id="model3-logistic-regression-with-reducedset" class="anchor" href="#model3-logistic-regression-with-reducedset" aria-hidden="true"><span class="octicon octicon-link"></span></a>Model3: Logistic Regression with reducedSet</h3>
+
+<div class="highlight highlight-r"><pre>set.seed(<span class="pl-c1">4321</span>)
+<span class="pl-vo">t5</span> <span class="pl-k">&lt;-</span> Sys.time()
+<span class="pl-vo">mod3</span> <span class="pl-k">&lt;-</span> train(<span class="pl-vo">default</span><span class="pl-k">~</span>., <span class="pl-v">data</span> <span class="pl-k">=</span> <span class="pl-vo">mydata4</span>, <span class="pl-v">method</span> <span class="pl-k">=</span> <span class="pl-s1"><span class="pl-pds">"</span>glm<span class="pl-pds">"</span></span>, <span class="pl-v">metric</span><span class="pl-k">=</span><span class="pl-s1"><span class="pl-pds">"</span>ROC<span class="pl-pds">"</span></span>,<span class="pl-v">trControl</span> <span class="pl-k">=</span> <span class="pl-vo">ctrl</span>)</pre></div>
+
+<pre><code>## Warning: glm.fit: fitted probabilities numerically 0 or 1 occurred
+</code></pre>
+
+<div class="highlight highlight-r"><pre><span class="pl-vo">t6</span> <span class="pl-k">&lt;-</span> Sys.time()
+<span class="pl-vo">tmod3</span> <span class="pl-k">&lt;-</span> difftime(<span class="pl-vo">t6</span>,<span class="pl-vo">t5</span>)
+<span class="pl-vo">mod3</span></pre></div>
+
+<pre><code>## Generalized Linear Model 
+## 
+## 45211 samples
+##    15 predictor
+##     2 classes: 'no', 'yes' 
+## 
+## No pre-processing
+## Resampling: Cross-Validated (10 fold) 
+## 
+## Summary of sample sizes: 40689, 40690, 40691, 40690, 40690, 40691, ... 
+## 
+## Resampling results
+## 
+##   ROC  Sens  Spec  ROC SD  Sens SD  Spec SD
+##   0.9  1     0.02  0.02    4e-04    0.02   
+## 
+## 
+</code></pre>
+
+<div class="highlight highlight-r"><pre><span class="pl-vo">tmod3</span></pre></div>
+
+<pre><code>## Time difference of 18.25 secs
+</code></pre>
+
+<h2>
+<a id="measure-and-select-the-model" class="anchor" href="#measure-and-select-the-model" aria-hidden="true"><span class="octicon octicon-link"></span></a>Measure and Select the Model</h2>
+
+<h3>
+<a id="measure-the-performance-by-auc-roc-and-processing-time-with-cross-validation" class="anchor" href="#measure-the-performance-by-auc-roc-and-processing-time-with-cross-validation" aria-hidden="true"><span class="octicon octicon-link"></span></a>Measure the performance by AUC (ROC) and processing Time (with cross validation)</h3>
+
+<ul>
+<li>For this credit risk model, accuracy is not the primary goal, ROC curve can be used for a quantitative assesment of the model. The model with the largest area under ROC curve would be the most effective. </li>
+<li>Because the severe Class imbalance exists, we can use ROC curve to choose a threshold that appropriately maximizes the trade-off between sensitivity and specificity or find the particular target points on the ROC curve. we can use the ROC curve to determine the alternate cutoffs for the class probabilities. </li>
+<li>The performance is estimated through 10-fold cross validation</li>
+</ul>
+
+<pre><code>## 
+## Call:
+## roc.default(response = mod1$pred$obs, predictor = mod1$pred$no,     levels = rev(levels(mod1$pred$obs)))
+## 
+## Data: mod1$pred$no in 7335 controls (mod1$pred$obs yes) &lt; 399564 cases (mod1$pred$obs no).
+## Area under the curve: 0.866
+</code></pre>
+
+<p><img src="./CreditRiskModel_files/figure-html/unnamed-chunk-15.png" alt="plot of chunk unnamed-chunk-15"> </p>
+
+<h3>
+<a id="selecting-model" class="anchor" href="#selecting-model" aria-hidden="true"><span class="octicon octicon-link"></span></a>Selecting Model</h3>
+
+<ul>
+<li>ROC plot shows the boosted tree model provide largest AUC, but just a little higher than the logistic regression model. However the processing time is around 6 times than the logistic regression model with reducedset. And Logistic Regression is much easier to interpret.</li>
+<li>Two logistic regression models have no significant difference in AUC, so we choose the one with reducedset because of the less time required mod3. Below is our final model. We can get the variable importance from the coeffieienct.</li>
+</ul>
+
+<p><strong>Final Model</strong></p>
+
+<pre><code>## 
+## Call:  NULL
+## 
+## Coefficients:
+##         (Intercept)                  age           job.admin.  
+##             -6.1973              -0.1013              -0.6756  
+##     job.blue.collar       job.management          job.retired  
+##             -0.1975              -0.0742              -0.4470  
+##        job.services       job.technician      marital.married  
+##             -0.5252              -0.4750              -0.3710  
+##      marital.single    education.primary  education.secondary  
+##             -0.1810              -0.0866              -0.0519  
+##  education.tertiary              balance           housing.no  
+##             -0.4233              -6.8706               0.4316  
+##            loan.yes  
+##              0.7240  
+## 
+## Degrees of Freedom: 45210 Total (i.e. Null);  45195 Residual
+## Null Deviance:       8160 
+## Residual Deviance: 6690  AIC: 6720
+</code></pre>
+
+<h2>
+<a id="determine-the-profit-risk-control-cutoff-rate" class="anchor" href="#determine-the-profit-risk-control-cutoff-rate" aria-hidden="true"><span class="octicon octicon-link"></span></a>Determine the profit-risk control cutoff rate.</h2>
+
+<p>We want to reduce the cost associate with the fraudulent transactions. Here, the event of interest is no fraud, The False Positive and False Negative results will cause a loss of money. True Positive results will bring the income.</p>
+
+<p>Assuming average requested loan for a person is $4000, and interest rate is 20%
+We make the assumption that the cost are only calculated for the first year</p>
+
+<ul>
+<li>False Positive Cost: $4000</li>
+<li>False Negative Cost: $4000*.2</li>
+</ul>
+
+<h3>
+<a id="calculate-probability-cost-function" class="anchor" href="#calculate-probability-cost-function" aria-hidden="true"><span class="octicon octicon-link"></span></a>Calculate Probability Cost Function</h3>
+
+<p>pcf is the proportion of the total cost associated with a false-positive sample.</p>
+
+<div class="highlight highlight-r"><pre><span class="pl-vo">fpc</span> <span class="pl-k">&lt;-</span> <span class="pl-c1">4000</span>
+<span class="pl-vo">fnc</span> <span class="pl-k">&lt;-</span> <span class="pl-c1">4000</span><span class="pl-k">*</span>.<span class="pl-c1">2</span>
+<span class="pl-vo">pcf</span> <span class="pl-k">&lt;-</span> (<span class="pl-vo">freq</span><span class="pl-k">*</span><span class="pl-vo">fpc</span>)<span class="pl-k">/</span>((<span class="pl-vo">freq</span><span class="pl-k">*</span><span class="pl-vo">fnc</span>)<span class="pl-k">+</span>((<span class="pl-c1">1</span><span class="pl-k">-</span><span class="pl-vo">freq</span>)<span class="pl-k">*</span><span class="pl-vo">fpc</span>))
+<span class="pl-vo">costWeight</span> <span class="pl-k">&lt;-</span> <span class="pl-c1">1</span><span class="pl-k">/</span><span class="pl-vo">pcf</span></pre></div>
+
+<p>costWeight is the cost associated with the falso-negative sample</p>
+
+<h3>
+<a id="get-cutoff-by-using-closesttopleft-strategy" class="anchor" href="#get-cutoff-by-using-closesttopleft-strategy" aria-hidden="true"><span class="octicon octicon-link"></span></a>Get cutoff by using "closest.topleft" strategy</h3>
+
+<p>Adjusting the Cost weights and get ROC cutoff</p>
+
+<div class="highlight highlight-r"><pre>library(<span class="pl-vo">pROC</span>)</pre></div>
+
+<pre><code>## Type 'citation("pROC")' for a citation.
+## 
+## Attaching package: 'pROC'
+## 
+## The following objects are masked from 'package:stats':
+## 
+##     cov, smooth, var
+</code></pre>
+
+<div class="highlight highlight-r"><pre><span class="pl-vo">cutoff</span> <span class="pl-k">&lt;-</span> coords(<span class="pl-vo">mod3Roc</span>, <span class="pl-s1"><span class="pl-pds">"</span>b<span class="pl-pds">"</span></span>, <span class="pl-v">ret</span><span class="pl-k">=</span>c(<span class="pl-s1"><span class="pl-pds">"</span>threshold<span class="pl-pds">"</span></span>, <span class="pl-s1"><span class="pl-pds">"</span>specificity<span class="pl-pds">"</span></span>, <span class="pl-s1"><span class="pl-pds">"</span>sensitivity<span class="pl-pds">"</span></span>), <span class="pl-v">best.method</span><span class="pl-k">=</span><span class="pl-s1"><span class="pl-pds">"</span>closest.topleft<span class="pl-pds">"</span></span>, <span class="pl-v">best.weights</span><span class="pl-k">=</span>c(<span class="pl-vo">costWeight</span>, <span class="pl-vo">freq</span>))
+<span class="pl-vo">cutoff</span></pre></div>
+
+<pre><code>##   threshold specificity sensitivity 
+##      0.9593      0.5448      0.9135
+</code></pre>
+
+<div class="highlight highlight-r"><pre><span class="pl-vo">cutoffRisk</span> <span class="pl-k">&lt;-</span> <span class="pl-c1">1</span><span class="pl-k">-</span> <span class="pl-vo">cutoff</span>[<span class="pl-c1">1</span>]
+<span class="pl-vo">cutoffRisk</span></pre></div>
+
+<pre><code>## threshold 
+##   0.04065
+</code></pre>
+
+<p><em>Therefore, with this logistic regression model,  0.0407 is the suggesed default risk to provide decision support on profit-risk control.</em></p>
+
+<h2>
+<a id="predicte-result" class="anchor" href="#predicte-result" aria-hidden="true"><span class="octicon octicon-link"></span></a>Predicte Result</h2>
+
+<p>Here shows the top 10 lines of the new dataset with probability filled in. </p>
+
+<div class="highlight highlight-r"><pre><span class="pl-vo">mydata5</span> <span class="pl-k">&lt;-</span> predict(<span class="pl-vo">mod3</span>, <span class="pl-v">newdata</span> <span class="pl-k">=</span> <span class="pl-vo">mydata4</span>, <span class="pl-v">type</span> <span class="pl-k">=</span> <span class="pl-s1"><span class="pl-pds">"</span>prob<span class="pl-pds">"</span></span>)
+<span class="pl-vo">mydata</span><span class="pl-k">$</span><span class="pl-vo">risk</span> <span class="pl-k">&lt;-</span> <span class="pl-vo">mydata5</span><span class="pl-k">$</span><span class="pl-vo">yes</span>
+head(<span class="pl-vo">mydata</span>)</pre></div>
+
+<pre><code>##   age          job marital education default balance housing loan
+## 1  58   management married  tertiary      no    2143     yes   no
+## 2  44   technician  single secondary      no      29     yes   no
+## 3  33 entrepreneur married secondary      no       2     yes  yes
+## 4  47  blue-collar married   unknown      no    1506     yes   no
+## 5  33      unknown  single   unknown      no       1      no   no
+## 6  35   management married  tertiary      no     231     yes   no
+##        risk
+## 1 0.0001260
+## 2 0.0191078
+## 3 0.0598666
+## 4 0.0007779
+## 5 0.0572081
+## 6 0.0113884
+</code></pre>
+      </section>
+      <footer>
+        <p>Project maintained by <a href="https://github.com/shinezhou9">shinezhou9</a></p>
+        <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://twitter.com/michigangraham">mattgraham</a></small></p>
+      </footer>
+    </div>
+    <!--[if !IE]><script>fixScale(document);</script><![endif]-->
+    
+  </body>
+</html>
