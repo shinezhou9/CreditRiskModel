@@ -75,6 +75,7 @@ if (window.hljs && document.readyState && document.readyState === "complete") {
 <li><a href="#set-traincontrol-parameters">Set trainControl parameters</a></li>
 <li><a href="#model1boosted-tree-model">Model1:Boosted Tree Model</a></li>
 <li><a href="#model2-logistic-regression-with-fullset">Model2: Logistic Regression with fullset</a></li>
+<li><a href="#model3-logistic-regression-with-reducedset">Model3: Logistic Regression with reducedSet</a></li>
 </ul></li>
 <li><a href="#measure-and-select-the-model">Measure and Select the Model</a><ul>
 <li><a href="#measure-the-performance-by-auc-roc-and-processing-time-with-cross-validation">Measure the performance by AUC (ROC) and processing Time (with cross validation)</a></li>
@@ -307,7 +308,9 @@ mod2</code></pre>
 ## </code></pre>
 <pre class="r"><code>tmod2</code></pre>
 <pre><code>## Time difference of 24.63 secs</code></pre>
-<p>Model3: Logistic Regression with reducedSet</p>
+</div>
+<div id="model3-logistic-regression-with-reducedset" class="section level3">
+<h3>Model3: Logistic Regression with reducedSet</h3>
 <pre class="r"><code>set.seed(4321)
 t5 &lt;- Sys.time()
 mod3 &lt;- train(default~., data = mydata4, method = &quot;glm&quot;, metric=&quot;ROC&quot;,trControl = ctrl)</code></pre>
@@ -359,6 +362,7 @@ mod3</code></pre>
 <li>ROC plot shows the boosted tree model provide largest AUC, but just a little higher than the logistic regression model. However the processing time is around 6 times than the logistic regression model with reducedset. And Logistic Regression is much easier to interpret.</li>
 <li>Two logistic regression models have no significant difference in AUC, so we choose the one with reducedset because of the less time required mod3. Below is our final model. We can get the variable importance from the coeffieienct.</li>
 </ul>
+<p><strong>Final Model</strong></p>
 <pre><code>## 
 ## Call:  NULL
 ## 
