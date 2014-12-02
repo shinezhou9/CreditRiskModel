@@ -306,7 +306,7 @@ tmod2
 ## Time difference of 24.63 secs
 ```
 
-Model3: Logistic Regression with reducedSet
+### Model3: Logistic Regression with reducedSet
 
 ```r
 set.seed(4321)
@@ -376,6 +376,8 @@ tmod3
 ### Selecting Model
 - ROC plot shows the boosted tree model provide largest AUC, but just a little higher than the logistic regression model. However the processing time is around 6 times than the logistic regression model with reducedset. And Logistic Regression is much easier to interpret.
 - Two logistic regression models have no significant difference in AUC, so we choose the one with reducedset because of the less time required mod3. Below is our final model. We can get the variable importance from the coeffieienct.
+
+**Final Model**
 
 ```
 ## 
