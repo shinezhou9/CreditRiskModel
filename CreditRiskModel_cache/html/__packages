@@ -1,0 +1,14 @@
+base
+caret
+corrplot
+doSNOW
+foreach
+gbm
+ggplot2
+iterators
+lattice
+plyr
+pROC
+snow
+subselect
+survival
