@@ -1,5 +1,5 @@
 ---
-title: "Credit Risk Model for Suning"
+title: "Credit Risk Model"
 author: "Shiming Zhou"
 date: "November 29, 2014"
 output:

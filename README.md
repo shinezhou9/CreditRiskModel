@@ -1,4 +1,4 @@
-# Credit Risk Model for Suning
+# Credit Risk Model
 Shiming Zhou  
 November 29, 2014  
 
